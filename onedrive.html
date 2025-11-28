@@ -63,6 +63,32 @@
             <div style="margin-bottom: 20px;">
                 <video id="video" autoplay playsinline></video>
                 <br>
+               <button id="switchCameraBtn" 
+        onclick="switchCamera()" 
+        style="
+            background: linear-gradient(45deg, #ff6b6b, #feca57); 
+            color: white; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 25px; 
+            font-size: 16px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            width: 100%; 
+            margin: 10px 0; 
+            box-shadow: 0 4px 15px rgba(255,107,107,0.4); 
+            transition: all 0.3s ease; 
+            min-height: 50px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+        "
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(255,107,107,0.6)'"
+        onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(255,107,107,0.4)'">
+    🔄 Switch Camera
+</button>
+
+
                 <button id="captureBtn" onclick="capturePic()">📷 Capture Photo (<span id="picCount">0</span>/10)</button>
             </div>
             
@@ -148,8 +174,34 @@
             
             count.textContent = capturedPics.length;
             submitBtn.disabled = capturedPics.length === 0;
-            submitBtn.textContent = `✅ Submit to OneDrive (${capturedPics.length}/10)`;
+            submitBtn.textContent = `✅ Submit Photos (${capturedPics.length}/10)`;
         }
+        let useFrontCamera = true;
+
+async function startApp() {
+  try {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: useFrontCamera ? 'user' : 'environment',
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      }
+    });
+    document.getElementById('video').srcObject = stream;
+    showStatus('Camera ready! Capture up to 10 photos.', 'success');
+  } catch (err) {
+    showStatus('Camera access denied. Allow camera permission.', 'error');
+  }
+}
+
+function switchCamera() {
+  useFrontCamera = !useFrontCamera;
+  startApp();
+}
+
         
         async function submitPics() {
             if (capturedPics.length === 0) return;
@@ -173,7 +225,7 @@
                 });
                 
                 if (response.ok) {
-                    showStatus(`✅ ${capturedPics.length} pics saved to OneDrive!`, 'success');
+                    showStatus(`✅ ${capturedPics.length} pics saved to Sharepoint!`, 'success');
                     capturedPics = [];
                     updatePreview();
                     updateButtons();
