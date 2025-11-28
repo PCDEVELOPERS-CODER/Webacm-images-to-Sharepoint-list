@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera App to OneDrive</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px; 
+        }
+        .container { max-width: 400px; margin: 0 auto; background: white; border-radius: 20px; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; margin-bottom: 30px; }
+        #cameraSection { text-align: center; }
+        button { 
+            background: #0078d4; color: white; border: none; padding: 15px 30px; 
+            border-radius: 25px; font-size: 16px; cursor: pointer; margin: 10px; 
+            transition: all 0.3s; width: 100%; 
+        }
+        button:hover { background: #106ebe; transform: translateY(-2px); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        #video { width: 100%; max-width: 350px; height: 450px; border-radius: 15px; background: #000; }
+        #preview { 
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); 
+            gap: 10px; margin: 20px 0; 
+        }
+        .preview-img { 
+            width: 80px; height: 80px; border-radius: 10px; object-fit: cover; 
+            position: relative; border: 3px solid #0078d4; 
+        }
+        .delete-btn { 
+    position: absolute; 
+    top: -6px; 
+    right: -6px; 
+    background: red; 
+    color: white; 
+    border: none; 
+    border-radius: 8px;   /* less round, not full circle */
+    width: 32px;          /* bigger button */
+    height: 32px;         /* bigger button */
+    cursor: pointer; 
+    font-size: 18px;      /* bigger X icon */
+    line-height: 32px;    /* center the X vertically */
+    text-align: center;   /* center horizontally */
+    padding: 0;
+}
+
+        #userIdInput { width: 100%; padding: 15px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; margin: 10px 0; }
+        .status { padding: 10px; border-radius: 10px; margin: 10px 0; text-align: center; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .count { background: #0078d4; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Camera</h1>
+
+        <!-- Direct Camera Section -->
+        <div id="cameraSection">
+            <div style="margin-bottom: 20px;">
+                <video id="video" autoplay playsinline></video>
+                <br>
+                <button id="captureBtn" onclick="capturePic()">📷 Capture Photo (<span id="picCount">0</span>/10)</button>
+            </div>
+            
+            <div>
+                <input type="text" id="userIdInput" placeholder="Your Name/Phone ID" maxlength="20">
+                <div id="preview"></div>
+            </div>
+            
+            <button id="submitBtn" onclick="submitPics()" disabled>✅ Submit All Photos (0/10)</button>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        let stream = null;
+        let capturedPics = [];
+        const MAX_PICS = 10;
+        
+        // Your Power Automate Flow URL
+        const FLOW_URL = 'https://fffc01421fece40eb61e4360c017ed.dd.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/d0428a63e61947da8bc337640971011d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=LkUO-Y1Hg1qk1htvIdjBfckeehiH7xnzFvclC6wT1Oc';
+
+        async function startApp() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user', 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 } 
+                    } 
+                });
+                document.getElementById('video').srcObject = stream;
+                showStatus('Camera ready! Capture up to 10 photos.', 'success');
+            } catch (err) {
+                showStatus('Camera access denied. Allow camera permission.', 'error');
+            }
+        }
+
+        function capturePic() {
+            if (capturedPics.length >= MAX_PICS) {
+                alert('Max 10 photos reached!');
+                return;
+            }
+            
+            const video = document.getElementById('video');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            capturedPics.push(dataUrl);
+            
+            updatePreview();
+            updateButtons();
+            showStatus(`${capturedPics.length}/10 photos captured!`, 'success');
+        }
+        
+        function updatePreview() {
+            const preview = document.getElementById('preview');
+            preview.innerHTML = '';
+            
+            capturedPics.forEach((pic, index) => {
+                const img = document.createElement('div');
+                img.className = 'preview-img';
+                img.innerHTML = `
+                    <img src="${pic}" style="width:100%;height:100%;border-radius:10px;">
+                    <button class="delete-btn" onclick="deletePic(${index})">×</button>
+                `;
+                preview.appendChild(img);
+            });
+        }
+        
+        function deletePic(index) {
+            capturedPics.splice(index, 1);
+            updatePreview();
+            updateButtons();
+            showStatus('Photo deleted!', 'error');
+        }
+        
+        function updateButtons() {
+            const count = document.getElementById('picCount');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            count.textContent = capturedPics.length;
+            submitBtn.disabled = capturedPics.length === 0;
+            submitBtn.textContent = `✅ Submit to OneDrive (${capturedPics.length}/10)`;
+        }
+        
+        async function submitPics() {
+            if (capturedPics.length === 0) return;
+            
+            const userId = document.getElementById('userIdInput').value || 'anonymous';
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Uploading...';
+            
+            try {
+                const payload = {
+                    images: capturedPics,
+                    userId: userId,
+                    timestamp: new Date().toISOString()
+                };
+                
+                const response = await fetch(FLOW_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    showStatus(`✅ ${capturedPics.length} pics saved to OneDrive!`, 'success');
+                    capturedPics = [];
+                    updatePreview();
+                    updateButtons();
+                    document.getElementById('userIdInput').value = '';
+                } else {
+                    throw new Error('Flow error');
+                }
+            } catch (error) {
+                showStatus('❌ Upload failed. Check FLOW_URL or try again.', 'error');
+            } finally {
+                submitBtn.disabled = capturedPics.length === 0;
+                updateButtons();
+            }
+        }
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            setTimeout(() => status.textContent = '', 5000);
+        }
+        
+        // Page load → automatically start camera
+        window.addEventListener('load', () => {
+            startApp();
+        });
+
+        // Cleanup on page unload
+        window.onbeforeunload = () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    </script>
+</body>
+</html>
